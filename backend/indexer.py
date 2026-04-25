@@ -6,6 +6,7 @@ from qdrant_client.models import PointStruct, VectorParams, Distance
 from database import SessionLocal
 from models import Product
 from sqlalchemy import text
+import uuid
 
 # Directories
 DATA_DIR = "./sample_images"
@@ -89,10 +90,11 @@ def index_images(reset=False):
             print(f"Error checking collections: {e}")
 
     print("Creating collection...")
-    client.collection_exists(
-        collection_name=COLLECTION_NAME,
-        vectors_config=VectorParams(size=512, distance=Distance.COSINE),
-    )
+    if not client.collection_exists(collection_name=COLLECTION_NAME):
+        client.create_collection(
+            collection_name=COLLECTION_NAME,
+            vectors_config=VectorParams(size=512, distance=Distance.COSINE),
+        )
 
     print(f"Reading images from {DATA_DIR}...")
     points = []
@@ -107,8 +109,7 @@ def index_images(reset=False):
         return
         
     for i, filename in enumerate(files):
-        # We start ID from 1 since Postgres serial typically starts at 1, but we'll manually set it for Qdrant sync
-        point_id = i + 1 
+        point_id = str(uuid.uuid4())
         filepath = os.path.join(DATA_DIR, filename)
         
         with open(filepath, "rb") as f:

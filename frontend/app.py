@@ -7,7 +7,7 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 st.set_page_config(page_title="Visual Search Engine", layout="wide")
 st.title("🛍️ Multimodal Visual Search Engine")
 
-tab1, tab2, tab3 = st.tabs(["Text Search", "Image Search", "Browse Database"])
+tab1, tab2, tab3, tab4 = st.tabs(["Text Search", "Image Search", "Browse Database", "Add Item"])
 
 def display_results(results):
     if not results:
@@ -86,3 +86,19 @@ with tab3:
                         st.markdown(f"**{item['name']}**")
     else:
         st.info("No items in database yet or database is loading.")
+
+# Tab 4: Add Item
+with tab4:
+    st.subheader("Add New Item to Database")
+    new_name = st.text_input("Item Name:")
+    new_image = st.file_uploader("Upload Item Image:", type=["jpg", "jpeg", "png"], key="add_item_uploader")
+    
+    if st.button("Add Item to System") and new_name and new_image:
+        with st.spinner("Processing image and generating embeddings..."):
+            files = {"file": (new_image.name, new_image.getvalue(), new_image.type)}
+            data = {"name": new_name}
+            res = requests.post(f"{BACKEND_URL}/items/", data=data, files=files)
+            if res.status_code == 200:
+                st.success(f"Item '{new_name}' added successfully! Go to 'Browse Database' to see it.")
+            else:
+                st.error(f"Failed to add item: {res.text}")

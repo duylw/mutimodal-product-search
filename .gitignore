@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Qdrant Database Storage
+qdrant_storage/
+qdrant_data/
+
+# Datasets / Images
+sample_images/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDEs and OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+
+# Docker
+# (Exclude docker-compose override files if you use them)
+docker-compose.override.yml

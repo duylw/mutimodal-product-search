@@ -2,7 +2,7 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir fastapi uvicorn qdrant-client httpx requests python-multipart pydantic-settings
+RUN pip install --no-cache-dir fastapi uvicorn qdrant-client httpx requests python-multipart pydantic-settings sqlalchemy psycopg2-binary
 
 COPY . .
 

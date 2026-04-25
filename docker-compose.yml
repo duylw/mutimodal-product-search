@@ -1,4 +1,15 @@
 services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: visual_search
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+
   qdrant:
     image: qdrant/qdrant:latest
     ports:
@@ -23,9 +34,11 @@ services:
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
       - INFERENCE_URL=http://inference:8001
+      - DATABASE_URL=postgresql://user:password@db:5432/visual_search
     volumes:
       - ./sample_images:/app/sample_images
     depends_on:
+      - db
       - qdrant
       - inference
 

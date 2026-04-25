@@ -3,6 +3,9 @@ import requests
 import time
 from qdrant_client import QdrantClient
 from qdrant_client.models import PointStruct, VectorParams, Distance
+from database import SessionLocal
+from models import Product
+from sqlalchemy import text
 
 # Directories
 DATA_DIR = "./sample_images"
@@ -13,17 +16,21 @@ QDRANT_PORT = int(os.getenv("QDRANT_PORT", 6333))
 INFERENCE_URL = os.getenv("INFERENCE_URL", "http://localhost:8001")
 
 def wait_for_services():
-    print("Waiting for Qdrant and Inference services to be ready...")
+    print("Waiting for Qdrant, Postgres, and Inference services to be ready...")
     for _ in range(30):
         try:
             # Check if inference API is up
             requests.get(f"{INFERENCE_URL}/docs", timeout=2)
             # Check if Qdrant is up
             QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=2).get_collections()
+            # Check if Postgres is up
+            db = SessionLocal()
+            db.execute(text("SELECT 1"))
+            db.close()
             print("Services are ready!")
             return True
-        except Exception:
-            print("Waiting for services...")
+        except Exception as e:
+            print(f"Waiting for services... ({e})")
             time.sleep(3)
     return False
 
@@ -37,6 +44,8 @@ SAMPLE_IMAGES = {
 
 def download_images():
     print("Downloading sample images...")
+    if not os.path.exists(DATA_DIR):
+        os.makedirs(DATA_DIR, exist_ok=True)
     for filename, url in SAMPLE_IMAGES.items():
         filepath = os.path.join(DATA_DIR, filename)
         if not os.path.exists(filepath):
@@ -44,7 +53,7 @@ def download_images():
                 f.write(requests.get(url).content)
     print("Download complete.")
 
-def index_images():
+def index_images(reset=False):
     if not wait_for_services():
         print("Services did not become ready in time. Exiting seeder.")
         return
@@ -52,19 +61,35 @@ def index_images():
     client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
     COLLECTION_NAME = "products"
 
-    # Check if already seeded (Idempotency)
-    try:
-        collections = client.get_collections().collections
-        if any(c.name == COLLECTION_NAME for c in collections):
-            count = client.count(collection_name=COLLECTION_NAME).count
-            if count > 0:
-                print(f"Database already seeded with {count} items. Skipping seeding.")
-                return
-    except Exception as e:
-        print(f"Error checking collections: {e}")
+    if reset:
+        print("Resetting databases...")
+        try:
+            client.delete_collection(collection_name=COLLECTION_NAME)
+        except Exception:
+            pass
+        
+        db = SessionLocal()
+        try:
+            db.execute(text("DELETE FROM products"))
+            db.commit()
+        except Exception:
+            db.rollback()
+        finally:
+            db.close()
+    else:
+        # Check if already seeded (Idempotency)
+        try:
+            collections = client.get_collections().collections
+            if any(c.name == COLLECTION_NAME for c in collections):
+                count = client.count(collection_name=COLLECTION_NAME).count
+                if count > 0:
+                    print(f"Database already seeded with {count} items. Skipping seeding.")
+                    return
+        except Exception as e:
+            print(f"Error checking collections: {e}")
 
     print("Creating collection...")
-    client.recreate_collection(
+    client.collection_exists(
         collection_name=COLLECTION_NAME,
         vectors_config=VectorParams(size=512, distance=Distance.COSINE),
     )
@@ -82,6 +107,8 @@ def index_images():
         return
         
     for i, filename in enumerate(files):
+        # We start ID from 1 since Postgres serial typically starts at 1, but we'll manually set it for Qdrant sync
+        point_id = i + 1 
         filepath = os.path.join(DATA_DIR, filename)
         
         with open(filepath, "rb") as f:
@@ -95,7 +122,7 @@ def index_images():
                 continue
             
         point = PointStruct(
-            id=i,
+            id=point_id,
             vector=embedding,
             payload={
                 "filename": filename,
@@ -107,12 +134,35 @@ def index_images():
         print(f"Embedded {filename}")
         
     if points:
+        # 1. Insert to Qdrant Vector DB
         client.upsert(
             collection_name=COLLECTION_NAME,
             points=points
         )
-        print(f"Seeded {len(points)} images successfully!")
+        
+        # 2. Insert to Postgres Relational DB
+        db = SessionLocal()
+        for p in points:
+            existing = db.query(Product).filter(Product.id == p.id).first()
+            if not existing:
+                prod = Product(
+                    id=p.id,
+                    name=p.payload["name"],
+                    filepath=p.payload["filepath"],
+                    filename=p.payload["filename"]
+                )
+                db.add(prod)
+        db.commit()
+        db.close()
+        
+        print(f"Seeded {len(points)} images successfully into Qdrant and Postgres!")
+
+import argparse
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--reset", action="store_true", help="Reset the database and re-seed")
+    args = parser.parse_args()
+    
     download_images()
-    index_images()
+    index_images(reset=args.reset)

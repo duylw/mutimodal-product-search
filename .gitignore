@@ -14,6 +14,9 @@ ENV/
 qdrant_storage/
 qdrant_data/
 
+# Postgres Database Storage
+pgdata/
+
 # Datasets / Images
 sample_images/
 

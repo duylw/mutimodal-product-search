@@ -11,7 +11,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-
 # Load model locally to the container
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model_id = "openai/clip-vit-base-patch32"

@@ -24,10 +24,26 @@ services:
       - "8001:8001"
     environment:
       - MODEL_ID=openai/clip-vit-base-patch32
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [ gpu ]
+    volumes:
+      - ./model_cache:/root/.cache/huggingface
 
   backend:
     build: ./backend
     command: sh -c "python indexer.py && uvicorn main:app --host 0.0.0.0 --port 8000"
+    develop:
+      watch:
+        - path: ./backend
+          action: sync
+          target: /app
+          ignore: [ "__pycache__", "*.pyc" ]
+
     ports:
       - "8000:8000"
     environment:

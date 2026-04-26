@@ -10,6 +10,9 @@ env/
 venv/
 ENV/
 
+# Models
+model_cache/
+
 # Qdrant Database Storage
 qdrant_storage/
 qdrant_data/
